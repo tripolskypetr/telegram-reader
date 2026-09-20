@@ -3,9 +3,12 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { getConfig } from "./params";
 import { readFile } from "fs/promises";
+import { lib } from "../lib";
+import { createTelegramLogger } from "./logger";
 
 export const getTelegram = singleshot(async () => {
     try {
+        lib.loggerService.log("getTelegram connect");
         const { CC_TELEGRAM_API_ID, CC_TELEGRAM_API_HASH } = getConfig();
         const session = await readFile("./session.txt", "utf-8");
         const stringSession = new StringSession(session);
@@ -14,6 +17,7 @@ export const getTelegram = singleshot(async () => {
             systemVersion: "Windows 10",
             deviceModel: "Desktop",
             appVersion: "1.0.0",
+            baseLogger: createTelegramLogger(),
         });
         {
             await client.connect();
@@ -21,7 +25,7 @@ export const getTelegram = singleshot(async () => {
         }
         return client;
     } catch (error) {
-        console.error("No session found. Please run 'npm start -- --auth' to create a session.");
+        lib.loggerService.log(`getTelegram failed: no session found. Please run 'require("telegram-reader").signIn()' to create a session.`, error);
         throw error;
     }
 });

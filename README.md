@@ -43,7 +43,13 @@ Requires Node.js (`sharp` and `fs/promises` are used).
 
    Resolution order: `setConfig` → environment variables → built-in defaults. The current effective values can be inspected with `getConfig()`.
 
-2. Sign in once — a QR code appears in the console; scan it in Telegram (*Settings → Devices → Link Desktop Device*); if 2FA is enabled, you will be prompted for the password:
+2. Create `session.txt` by signing in once. The recommended way is a one-liner:
+
+   ```bash
+   node -e 'require("telegram-reader").signIn()'
+   ```
+
+   Or call it from your own code:
 
    ```ts
    import { signIn } from "telegram-reader";
@@ -52,7 +58,7 @@ Requires Node.js (`sharp` and `fs/promises` are used).
    // Session saved to ./session.txt
    ```
 
-   The session is saved to `./session.txt` and reused by all subsequent calls. This file grants full access to your account — do not commit it.
+   A QR code appears in the console — scan it in Telegram (*Settings → Devices → Link Desktop Device*); if 2FA is enabled, you will be prompted for the password. The session is saved to `./session.txt` and reused by all subsequent calls.
 
 ## Usage
 
