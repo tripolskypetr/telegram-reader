@@ -2,6 +2,26 @@ import { Dimension } from 'get-moment-stamp';
 import * as functools_kit from 'functools-kit';
 import { TelegramClient } from 'telegram';
 
+interface ILogger {
+    log(topic: string, ...args: any[]): void;
+    debug(topic: string, ...args: any[]): void;
+    info(topic: string, ...args: any[]): void;
+    warn(topic: string, ...args: any[]): void;
+}
+declare class LoggerService implements ILogger {
+    private _commonLogger;
+    log: (topic: string, ...args: any[]) => Promise<void>;
+    debug: (topic: string, ...args: any[]) => Promise<void>;
+    info: (topic: string, ...args: any[]) => Promise<void>;
+    warn: (topic: string, ...args: any[]) => Promise<void>;
+    setLogger: (logger: ILogger) => void;
+}
+
+declare class AuthService {
+    readonly loggerService: LoggerService;
+    signIn: () => Promise<void>;
+}
+
 interface ScraperMessage {
     id: number;
     channel: string;
@@ -9,6 +29,56 @@ interface ScraperMessage {
     date: Date;
     photo: string | null;
 }
+
+declare class ScraperService {
+    private readonly loggerService;
+    scrapeDay: (dto: {
+        channel: string;
+        when: Date;
+    }) => Promise<ScraperMessage[]>;
+    scrapeLookback: (dto: {
+        channel: string;
+        when: Date;
+        limit: number;
+        dimension?: Dimension;
+    }) => Promise<ScraperMessage[]>;
+    scrapePage: (dto: {
+        channel: string;
+        limit: number;
+        offset: number;
+        when: Date;
+    }) => Promise<ScraperMessage[]>;
+}
+
+declare class TelegramGlobalService {
+    readonly loggerService: LoggerService;
+    readonly authService: AuthService;
+    readonly scraperService: ScraperService;
+    signIn: () => Promise<void>;
+    scrapeDay: (dto: {
+        channel: string;
+        when: Date;
+    }) => Promise<ScraperMessage[]>;
+    scrapeLookback: (dto: {
+        channel: string;
+        when: Date;
+        limit: number;
+        dimension?: Dimension;
+    }) => Promise<ScraperMessage[]>;
+    scrapePage: (dto: {
+        channel: string;
+        limit: number;
+        offset: number;
+        when: Date;
+    }) => Promise<ScraperMessage[]>;
+}
+
+declare const lib: {
+    telegramGlobalService: TelegramGlobalService;
+    authService: AuthService;
+    loggerService: LoggerService;
+    scraperService: ScraperService;
+};
 
 /**
  * Signs the client in to Telegram, establishing an authorized MTProto session.
@@ -117,10 +187,6 @@ declare const GLOBAL_CONFIG: {
     CC_TELEGRAM_API_ID: number;
     CC_TELEGRAM_API_HASH: string;
 };
-declare const DEFAULT_CONFIG: Readonly<{
-    CC_TELEGRAM_API_ID: number;
-    CC_TELEGRAM_API_HASH: string;
-}>;
 type Config = typeof GLOBAL_CONFIG;
 declare const getConfig: () => {
     CC_TELEGRAM_API_ID: number;
@@ -128,4 +194,4 @@ declare const getConfig: () => {
 };
 declare const setConfig: (config: Partial<Config>) => void;
 
-export { type Config, DEFAULT_CONFIG, getConfig, getTelegram, scrapeDay, scrapeLookback, scrapePage, setConfig, signIn };
+export { getConfig, getTelegram, lib, scrapeDay, scrapeLookback, scrapePage, setConfig, signIn };

@@ -7,3 +7,6 @@ export { scrapePage } from "./functions/scrape_page";
 
 export { getTelegram } from "./config/telegram";
 export { getConfig, setConfig } from "./config/params";
+
+export { lib } from "./lib";
+
