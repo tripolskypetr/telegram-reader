@@ -1,7 +1,25 @@
 {
   "name": "telegram-reader",
   "version": "1.0.0",
-  "private": true,
+  "description": "Read Telegram channel posts via MTProto as flat rows with text and lightweight photo previews — built for LLM agents, analytics, and trading-signal backtests with backtest-kit",
+  "keywords": [
+    "telegram",
+    "mtproto",
+    "gramjs",
+    "scraper",
+    "channel",
+    "userbot",
+    "backtest",
+    "backtest-kit",
+    "trading",
+    "llm"
+  ],
+  "homepage": "https://backtest-kit.github.io/documents/article_08_ai_liquidity_harvesting.html",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tripolskypetr/backtest-kit.git"
+  },
+  "author": "Petr Tripolsky <tripolskypetr@gmail.com>",
   "scripts": {
     "build": "rollup -c",
     "repl": "dotenv -e .env -- npm run build && node -e \"require('./build/index.cjs')\" --interactive"
