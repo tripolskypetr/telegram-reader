@@ -31,7 +31,7 @@ interface ScraperMessage {
 }
 
 declare class ScraperService {
-    private readonly loggerService;
+    readonly loggerService: LoggerService;
     scrapeDay: (dto: {
         channel: string;
         when: Date;

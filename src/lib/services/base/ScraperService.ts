@@ -43,16 +43,16 @@ const EXEC_DELAY = 100;
  * @returns JPEG-буфер ужатого превью либо null, если скачать не удалось
  */
 const DOWNLOAD_MEDIA_FN = execpool(
-  async (message: Api.Message): Promise<Buffer | null> => {
+  async (self: ScraperService, message: Api.Message): Promise<Buffer | null> => {
     const client = await getTelegram();
     const media = await client.downloadMedia(message);
     if (!media) {
-      console.warn(`ScraperService download failed for message=${message.id}`);
+      self.loggerService.warn(`ScraperService download failed for message=${message.id}`);
       return null;
     }
     const source = Buffer.isBuffer(media) ? media : Buffer.from(media);
     try {
-      console.warn(
+      self.loggerService.warn(
         `ScraperService resize begin for message=${message.id}`
       );
       return await sharp(source)
@@ -63,7 +63,7 @@ const DOWNLOAD_MEDIA_FN = execpool(
     } catch (error) {
       // Ужатие — оптимизация, а не обязательный шаг: пусть агент получит
       // тяжёлый оригинал, чем ничего
-      console.warn(
+      self.loggerService.warn(
         `ScraperService resize failed for message=${message.id}, using original`,
         error,
       );
@@ -77,7 +77,7 @@ const DOWNLOAD_MEDIA_FN = execpool(
 );
 
 export class ScraperService {
-  private readonly loggerService = inject<LoggerService>(TYPES.loggerService);
+  readonly loggerService = inject<LoggerService>(TYPES.loggerService);
 
   public scrapeDay = async (dto: { 
     channel: string;
@@ -109,7 +109,7 @@ export class ScraperService {
       }
       let photo: string | null = null;
       if (message.photo) {
-        const media = await DOWNLOAD_MEDIA_FN(message);
+        const media = await DOWNLOAD_MEDIA_FN(this, message);
         photo = media ? media.toString("base64") : null;
       }
       rows.push({
@@ -158,7 +158,7 @@ export class ScraperService {
       }
       let photo: string | null = null;
       if (message.photo) {
-        const media = await DOWNLOAD_MEDIA_FN(message);
+        const media = await DOWNLOAD_MEDIA_FN(this, message);
         photo = media ? media.toString("base64") : null;
       }
       rows.push({
@@ -197,7 +197,7 @@ export class ScraperService {
       let photo: string | null = null;
 
       if (message.photo) {
-        const media = await DOWNLOAD_MEDIA_FN(message);
+        const media = await DOWNLOAD_MEDIA_FN(this, message);
         photo = media ? media.toString("base64") : null;
       }
 
