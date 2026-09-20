@@ -1,6 +1,6 @@
 import { Dimension } from 'get-moment-stamp';
 import * as functools_kit from 'functools-kit';
-import { TelegramClient } from 'telegram';
+import * as telegram from 'telegram';
 
 interface ILogger {
     log(topic: string, ...args: any[]): void;
@@ -181,7 +181,7 @@ declare function scrapePage(dto: {
     when: Date;
 }): Promise<ScraperMessage[]>;
 
-declare const getTelegram: (() => Promise<TelegramClient>) & functools_kit.ISingleshotClearable<() => Promise<TelegramClient>>;
+declare const getTelegram: (() => Promise<telegram.TelegramClient>) & functools_kit.ISingleshotClearable<() => Promise<telegram.TelegramClient>>;
 
 declare const GLOBAL_CONFIG: {
     CC_TELEGRAM_API_ID: number;

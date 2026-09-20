@@ -4,7 +4,7 @@ import TYPES from "../../core/types";
 import { getTelegram } from "../../../config/telegram";
 import { ScraperMessage } from "../../../model/ScraperMessage.model";
 import { execpool, pickDocuments } from "functools-kit";
-import { Api } from "telegram";
+import type { Api } from "telegram";
 import sharp from "sharp";
 import type { Dimension } from "get-moment-stamp";
 

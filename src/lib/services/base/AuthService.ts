@@ -1,5 +1,3 @@
-import { TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions";
 import readline from "readline";
 import { writeFile } from "fs/promises";
 import qrcodeTerminal from "qrcode-terminal";
@@ -9,6 +7,11 @@ import LoggerService from "../base/LoggerService";
 import TYPES from "../../core/types";
 
 const HANDLE_SIGNIN_FN = async () => {
+
+    // Ленивый импорт: у gramjs нет exports-карты, подпути в ESM резолвятся
+    // только по полному пути с расширением
+    const { TelegramClient } = await import("telegram");
+    const { StringSession } = await import("telegram/sessions/index.js");
 
     const { CC_TELEGRAM_API_ID, CC_TELEGRAM_API_HASH } = getConfig();
 
