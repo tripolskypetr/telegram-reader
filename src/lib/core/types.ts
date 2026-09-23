@@ -8,9 +8,14 @@ const globalServices = {
     telegramGlobalService: Symbol('telegramGlobalService'),
 }
 
+const cacheServices = {
+    telegramCacheService: Symbol('telegramCacheService'),
+}
+
 export const TYPES = {
     ...baseServices,
     ...globalServices,
+    ...cacheServices,
 }
 
 export default TYPES;

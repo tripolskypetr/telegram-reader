@@ -50,10 +50,32 @@ declare class ScraperService {
     }) => Promise<ScraperMessage[]>;
 }
 
+/**
+ * Отдаёт историю канала строго из кеша завершённых дней. Никаких живых
+ * докачиваний: запрос, выходящий в текущий день, — ошибка вызывающего.
+ * Решение "кеш или живой скрейпер" принимает TelegramGlobalService.
+ */
+declare class TelegramCacheService {
+    readonly loggerService: LoggerService;
+    readonly scraperService: ScraperService;
+    private cacheDay;
+    scrapeDay: (dto: {
+        channel: string;
+        when: Date;
+    }) => Promise<ScraperMessage[]>;
+    scrapeLookback: (dto: {
+        channel: string;
+        when: Date;
+        limit: number;
+        dimension?: Dimension;
+    }) => Promise<ScraperMessage[]>;
+}
+
 declare class TelegramGlobalService {
     readonly loggerService: LoggerService;
     readonly authService: AuthService;
     readonly scraperService: ScraperService;
+    readonly telegramCacheService: TelegramCacheService;
     signIn: () => Promise<void>;
     scrapeDay: (dto: {
         channel: string;
@@ -74,6 +96,7 @@ declare class TelegramGlobalService {
 }
 
 declare const lib: {
+    telegramCacheService: TelegramCacheService;
     telegramGlobalService: TelegramGlobalService;
     authService: AuthService;
     loggerService: LoggerService;

@@ -7,13 +7,7 @@ import { execpool, pickDocuments } from "functools-kit";
 import type { Api } from "telegram";
 import sharp from "sharp";
 import type { Dimension } from "get-moment-stamp";
-
-// Длительности измерений в миллисекундах, совместимы с get-moment-stamp
-const DIMENSION_DELTA: Record<Dimension, number> = {
-  minute: 1000 * 60,
-  hour: 1000 * 60 * 60,
-  day: 1000 * 60 * 60 * 24,
-};
+import { DIMENSION_DELTA } from "../../../utils/datetime";
 
 // Целевая ширина превью: 800px — середина телеграмовской прогрессии размеров
 // (320/800/1280/2560). На 320px текст мылится, ретина-размеры (1280+) для

@@ -6,6 +6,7 @@ import LoggerService from "../services/base/LoggerService";
 import ScraperService from "../services/base/ScraperService";
 
 import TelegramGlobalService from "../services/global/TelegramGlobalService";
+import TelegramCacheService from "../services/cache/TelegramCacheService";
 
 {
     provide(TYPES.authService, () => new AuthService());
@@ -15,4 +16,8 @@ import TelegramGlobalService from "../services/global/TelegramGlobalService";
 
 {
     provide(TYPES.telegramGlobalService, () => new TelegramGlobalService());
+}
+
+{
+    provide(TYPES.telegramCacheService, () => new TelegramCacheService());
 }
