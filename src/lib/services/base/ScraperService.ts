@@ -3,11 +3,12 @@ import LoggerService from "../base/LoggerService";
 import TYPES from "../../core/types";
 import { getTelegram } from "../../../config/telegram";
 import { ScraperMessage } from "../../../model/ScraperMessage.model";
-import { execpool, pickDocuments } from "functools-kit";
+import { execpool, pickDocuments, queued, ttl } from "functools-kit";
 import type { Api } from "telegram";
 import sharp from "sharp";
 import type { Dimension } from "get-moment-stamp";
-import { DIMENSION_DELTA } from "../../../utils/datetime";
+import { DIMENSION_DELTA, dayStampUtc } from "../../../utils/datetime";
+import { alignToMinute } from "../../../utils/align";
 
 // Целевая ширина превью: 800px — середина телеграмовской прогрессии размеров
 // (320/800/1280/2560). На 320px текст мылится, ретина-размеры (1280+) для
@@ -23,6 +24,10 @@ const MAX_EXEC = 5;
 
 // Даем задержку чтобы кластер пришел в норму
 const EXEC_DELAY = 100;
+
+// TTL живых кешей: короткий, потому что данные ещё пополняются; длинное
+// кеширование завершённых дней — забота TelegramCacheService
+const TTL_TIMEOUT = 60 * 1_000;
 
 /**
  * Скачивает фото поста и ужимает его до PHOTO_THUMB_WIDTH.
@@ -70,16 +75,14 @@ const DOWNLOAD_MEDIA_FN = execpool(
   }
 );
 
-export class ScraperService {
-  readonly loggerService = inject<LoggerService>(TYPES.loggerService);
-
-  public scrapeDay = async (dto: { 
-    channel: string;
-    when: Date;
-   }): Promise<ScraperMessage[]> => {
-    this.loggerService.log("scraperService scrapeDay", {
-      dto,
-    });
+const SCRAPE_DAY_FN = ttl(
+  async (
+    self: ScraperService,
+    dto: {
+      channel: string;
+      when: Date;
+    },
+  ): Promise<ScraperMessage[]> => {
     const client = await getTelegram();
 
     const dayStart = new Date(dto.when);
@@ -103,7 +106,7 @@ export class ScraperService {
       }
       let photo: string | null = null;
       if (message.photo) {
-        const media = await DOWNLOAD_MEDIA_FN(this, message);
+        const media = await DOWNLOAD_MEDIA_FN(self, message);
         photo = media ? media.toString("base64") : null;
       }
       rows.push({
@@ -115,17 +118,24 @@ export class ScraperService {
       });
     }
     return rows;
-  };
+  },
+  {
+    timeout: TTL_TIMEOUT,
+    // От when важна только дата — ключ по UTC-дню
+    key: ([, dto]) => `${dto.channel}-${dayStampUtc(dto.when)}`,
+  },
+);
 
-  public scrapeLookback = async (dto: {
-    channel: string;
-    when: Date;
-    limit: number;
-    dimension?: Dimension;
-  }): Promise<ScraperMessage[]> => {
-    this.loggerService.log("scraperService scrapeLookback", {
-      dto,
-    });
+const SCRAPE_LOOKBACK_FN = ttl(
+  async (
+    self: ScraperService,
+    dto: {
+      channel: string;
+      when: Date;
+      limit: number;
+      dimension?: Dimension;
+    },
+  ): Promise<ScraperMessage[]> => {
     const client = await getTelegram();
 
     // Подсчёт ведём в минутах: любое измерение сначала приводим к минутам,
@@ -152,7 +162,7 @@ export class ScraperService {
       }
       let photo: string | null = null;
       if (message.photo) {
-        const media = await DOWNLOAD_MEDIA_FN(this, message);
+        const media = await DOWNLOAD_MEDIA_FN(self, message);
         photo = media ? media.toString("base64") : null;
       }
       rows.push({
@@ -164,17 +174,26 @@ export class ScraperService {
       });
     }
     return rows;
-  };
+  },
+  {
+    timeout: TTL_TIMEOUT,
+    // when округлён вниз до минуты — повторные вызовы с теми же параметрами
+    // в пределах минуты бьют в кеш
+    key: ([, dto]) =>
+      `${dto.channel}-${alignToMinute(dto.when)}-${dto.limit}-${dto.dimension ?? "minute"}`,
+  },
+);
 
-  public scrapePage = async (dto: {
-    channel: string;
-    limit: number;
-    offset: number;
-    when: Date;
-  }): Promise<ScraperMessage[]> => {
-    this.loggerService.log("scraperService scrapePage", {
-      dto,
-    });
+const SCRAPE_PAGE_FN = ttl(
+  async (
+    self: ScraperService,
+    dto: {
+      channel: string;
+      limit: number;
+      offset: number;
+      when: Date;
+    },
+  ): Promise<ScraperMessage[]> => {
     const client = await getTelegram();
 
     const iter = pickDocuments<ScraperMessage>(dto.limit, dto.offset);
@@ -191,7 +210,7 @@ export class ScraperService {
       let photo: string | null = null;
 
       if (message.photo) {
-        const media = await DOWNLOAD_MEDIA_FN(this, message);
+        const media = await DOWNLOAD_MEDIA_FN(self, message);
         photo = media ? media.toString("base64") : null;
       }
 
@@ -211,6 +230,90 @@ export class ScraperService {
     }
 
     return iter().rows;
+  },
+  {
+    timeout: TTL_TIMEOUT,
+    // when округлён вниз до минуты — повторные вызовы с теми же параметрами
+    // в пределах минуты бьют в кеш
+    key: ([, dto]) =>
+      `${dto.channel}-${alignToMinute(dto.when)}-${dto.limit}-${dto.offset}`,
+  },
+);
+
+type ScrapeAction =
+  | { type: "day"; dto: Parameters<typeof SCRAPE_DAY_FN>[1] }
+  | { type: "lookback"; dto: Parameters<typeof SCRAPE_LOOKBACK_FN>[1] }
+  | { type: "page"; dto: Parameters<typeof SCRAPE_PAGE_FN>[1] };
+
+// Единая точка входа во все походы в Telegram: queued сериализует вызовы,
+// единовременно выполняется ровно один скрейп, остальные ждут своей очереди —
+// параллельные iterMessages не молотят один MTProto-клиент одновременно
+const SCRAPE_FN = queued(
+  async (self: ScraperService, action: ScrapeAction): Promise<ScraperMessage[]> => {
+    try {
+      if (action.type === "day") {
+        return await SCRAPE_DAY_FN(self, action.dto);
+      }
+      if (action.type === "lookback") {
+        return await SCRAPE_LOOKBACK_FN(self, action.dto);
+      }
+      return await SCRAPE_PAGE_FN(self, action.dto);
+    } finally {
+      // Уборка протухших записей: ключи с alignToMinute повторно не
+      // запрашиваются, без gc они копились бы до конца процесса
+      SCRAPE_DAY_FN.gc();
+      SCRAPE_LOOKBACK_FN.gc();
+      SCRAPE_PAGE_FN.gc();
+    }
+  },
+);
+
+export class ScraperService {
+  readonly loggerService = inject<LoggerService>(TYPES.loggerService);
+
+  public scrapeDay = async (dto: {
+    channel: string;
+    when: Date;
+  }): Promise<ScraperMessage[]> => {
+    this.loggerService.log("scraperService scrapeDay", {
+      dto,
+    });
+    // cancel() у очереди не используется, CANCELED_PROMISE_SYMBOL недостижим
+    return (await SCRAPE_FN(this, { type: "day", dto })) as ScraperMessage[];
+  };
+
+  public scrapeLookback = async (dto: {
+    channel: string;
+    when: Date;
+    limit: number;
+    dimension?: Dimension;
+  }): Promise<ScraperMessage[]> => {
+    this.loggerService.log("scraperService scrapeLookback", {
+      dto,
+    });
+    // when выравниваем до минуты, чтобы результат соответствовал ключу кеша,
+    // а не секундам первого вызвавшего
+    return (await SCRAPE_FN(this, {
+      type: "lookback",
+      dto: { ...dto, when: new Date(alignToMinute(dto.when)) },
+    })) as ScraperMessage[];
+  };
+
+  public scrapePage = async (dto: {
+    channel: string;
+    limit: number;
+    offset: number;
+    when: Date;
+  }): Promise<ScraperMessage[]> => {
+    this.loggerService.log("scraperService scrapePage", {
+      dto,
+    });
+    // when выравниваем до минуты, чтобы результат соответствовал ключу кеша,
+    // а не секундам первого вызвавшего
+    return (await SCRAPE_FN(this, {
+      type: "page",
+      dto: { ...dto, when: new Date(alignToMinute(dto.when)) },
+    })) as ScraperMessage[];
   };
 }
 

@@ -11,7 +11,9 @@ import {
   dayStampUtc,
 } from "../../../utils/datetime";
 
-const TTL_TIMEOUT = 5 * 60 * 1_000;
+// TTL дневного кеша: повторные обращения в пределах таймаута отдаются
+// без похода в Telegram; длиннее живого — завершённые дни неизменны
+const TTL_TIMEOUT = 15 * 60 * 1_000;
 
 /**
  * Отдаёт историю канала строго из кеша завершённых дней. Никаких живых
@@ -46,7 +48,12 @@ export class TelegramCacheService {
         `telegram-reader TelegramCacheService scrapeDay: day ${dto.when.toISOString()} is not finished yet, cache holds completed days only`,
       );
     }
-    return await this.cacheDay(dto.channel, dto.when);
+    try {
+      return await this.cacheDay(dto.channel, dto.when);
+    } finally {
+      // Уборка протухших дневных записей, фонового таймера у ttl нет
+      this.cacheDay.gc();
+    }
   };
 
   public scrapeLookback = async (dto: {
@@ -73,18 +80,23 @@ export class TelegramCacheService {
 
     const rows: Awaited<ReturnType<typeof this.cacheDay>> = [];
 
-    // Дни окна от новых к старым, с фильтрацией по границам [windowStart, when)
-    const lastDay = dayStampUtc(new Date(dto.when.getTime() - 1));
-    const firstDay = Math.floor(windowStart / DAY_MS);
+    try {
+      // Дни окна от новых к старым, с фильтрацией по границам [windowStart, when)
+      const lastDay = dayStampUtc(new Date(dto.when.getTime() - 1));
+      const firstDay = Math.floor(windowStart / DAY_MS);
 
-    for (let day = lastDay; day >= firstDay; day--) {
-      const messages = await this.cacheDay(dto.channel, new Date(day * DAY_MS));
-      rows.push(
-        ...messages.filter(({ date }) => {
-          const ts = date.getTime();
-          return ts >= windowStart && ts < dto.when.getTime();
-        }),
-      );
+      for (let day = lastDay; day >= firstDay; day--) {
+        const messages = await this.cacheDay(dto.channel, new Date(day * DAY_MS));
+        rows.push(
+          ...messages.filter(({ date }) => {
+            const ts = date.getTime();
+            return ts >= windowStart && ts < dto.when.getTime();
+          }),
+        );
+      }
+    } finally {
+      // Уборка протухших дневных записей, фонового таймера у ttl нет
+      this.cacheDay.gc();
     }
 
     return rows;
